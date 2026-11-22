@@ -1,0 +1,422 @@
+{
+  "info": {
+    "name": "BTH5 Reporting localhost",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy lần lượt từ Đăng nhập. Collection tạo sản phẩm và đơn hàng mới, kiểm tra số liệu và xóa hai báo cáo vừa tạo."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Đăng nhập",
+      "request": {
+        "method": "POST",
+        "url": "{{authBase}}/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"userName\":\"phat\",\"password\":\"UGhhdEAxMjM=\"}"
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "[\"token\", \"productId\", \"orderId\", \"productReportId\", \"orderReportId\"].forEach(key => pm.collectionVariables.unset(key));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().access_token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tạo sản phẩm mẫu",
+      "request": {
+        "method": "POST",
+        "url": "{{productBase}}/products",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\":\"Sổ tay BTH5\",\"description\":\"Dữ liệu kiểm tra báo cáo\",\"quantity\":{{initialStock}},\"price\":{{salePrice}}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "    pm.collectionVariables.set(\"productId\", pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tạo đơn hàng mẫu",
+      "request": {
+        "method": "POST",
+        "url": "{{orderBase}}/orders",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"customer_name\":\"Demo BTH5\",\"customer_email\":\"demo@example.com\",\"items\":[{\"product_id\":{{productId}},\"quantity\":{{saleQuantity}}}]}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "    pm.collectionVariables.set(\"orderId\", pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hoàn tất đơn hàng",
+      "request": {
+        "method": "PUT",
+        "url": "{{orderBase}}/orders/{{orderId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"status\":\"completed\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"Trạng thái đã hoàn tất\", () => pm.expect(pm.response.json().status).to.eql(\"completed\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tạo báo cáo đơn hàng",
+      "request": {
+        "method": "POST",
+        "url": "{{reportBase}}/reports/orders",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"order_id\":{{orderId}},\"unit_costs\":{\"{{productId}}\":{{unitCost}}}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "    const report = pm.response.json();",
+              "    const qty = Number(pm.collectionVariables.get(\"saleQuantity\"));",
+              "    const revenue = qty * Number(pm.collectionVariables.get(\"salePrice\"));",
+              "    const cost = qty * Number(pm.collectionVariables.get(\"unitCost\"));",
+              "    pm.collectionVariables.set(\"orderReportId\", report.id);",
+              "    pm.test(\"Doanh thu\", () => pm.expect(report.total_revenue).to.eql(revenue.toFixed(2)));",
+              "    pm.test(\"Chi phí\", () => pm.expect(report.total_cost).to.eql(cost.toFixed(2)));",
+              "    pm.test(\"Lợi nhuận\", () => pm.expect(report.total_profit).to.eql((revenue - cost).toFixed(2)));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Danh sách báo cáo đơn hàng",
+      "request": {
+        "method": "GET",
+        "url": "{{reportBase}}/reports/orders",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"Có báo cáo vừa tạo\", () => pm.expect(pm.response.json().map(row => row.id)).to.include(Number(pm.collectionVariables.get(\"orderReportId\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chi tiết báo cáo đơn hàng",
+      "request": {
+        "method": "GET",
+        "url": "{{reportBase}}/reports/orders/{{orderReportId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"Đúng ID báo cáo\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"orderReportId\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tạo báo cáo sản phẩm",
+      "request": {
+        "method": "POST",
+        "url": "{{reportBase}}/reports/products",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"product_id\":{{productId}},\"order_report_id\":{{orderReportId}}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "    const report = pm.response.json();",
+              "    const qty = Number(pm.collectionVariables.get(\"saleQuantity\"));",
+              "    const revenue = qty * Number(pm.collectionVariables.get(\"salePrice\"));",
+              "    const cost = qty * Number(pm.collectionVariables.get(\"unitCost\"));",
+              "    pm.collectionVariables.set(\"productReportId\", report.id);",
+              "    pm.test(\"Doanh thu\", () => pm.expect(report.revenue).to.eql(revenue.toFixed(2)));",
+              "    pm.test(\"Chi phí\", () => pm.expect(report.cost).to.eql(cost.toFixed(2)));",
+              "    pm.test(\"Lợi nhuận\", () => pm.expect(report.profit).to.eql((revenue - cost).toFixed(2)));",
+              "    pm.test(\"Số lượng bán\", () => pm.expect(report.total_sold).to.eql(qty));",
+              "    pm.test(\"Tồn kho\", () => pm.expect(report.stock_quantity).to.eql(Number(pm.collectionVariables.get(\"initialStock\")) - qty));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Danh sách báo cáo sản phẩm",
+      "request": {
+        "method": "GET",
+        "url": "{{reportBase}}/reports/products",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"Có báo cáo vừa tạo\", () => pm.expect(pm.response.json().map(row => row.id)).to.include(Number(pm.collectionVariables.get(\"productReportId\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chi tiết báo cáo sản phẩm",
+      "request": {
+        "method": "GET",
+        "url": "{{reportBase}}/reports/products/{{productReportId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.test(\"Đúng ID báo cáo\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"productReportId\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xóa báo cáo sản phẩm vừa tạo",
+      "request": {
+        "method": "DELETE",
+        "url": "{{reportBase}}/reports/products/{{productReportId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+              "if (pm.response.code === 204) {",
+              "    pm.collectionVariables.unset(\"productReportId\");",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xóa báo cáo đơn hàng vừa tạo",
+      "request": {
+        "method": "DELETE",
+        "url": "{{reportBase}}/reports/orders/{{orderReportId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+              "if (pm.response.code === 204) {",
+              "    pm.collectionVariables.unset(\"orderReportId\");",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "authBase",
+      "value": "http://127.0.0.1:5001"
+    },
+    {
+      "key": "productBase",
+      "value": "http://127.0.0.1:5002"
+    },
+    {
+      "key": "orderBase",
+      "value": "http://127.0.0.1:5003"
+    },
+    {
+      "key": "reportBase",
+      "value": "http://127.0.0.1:5004"
+    },
+    {
+      "key": "initialStock",
+      "value": "20"
+    },
+    {
+      "key": "saleQuantity",
+      "value": "3"
+    },
+    {
+      "key": "salePrice",
+      "value": "50000"
+    },
+    {
+      "key": "unitCost",
+      "value": "30000"
+    }
+  ]
+}
